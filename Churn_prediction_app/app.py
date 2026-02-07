@@ -151,7 +151,11 @@ if page == "Overview":
     col1, col2 = st.columns(2)
 
     with col1:
-        st.image("images/data.jpg", use_container_width=True)
+        st.image(
+    os.path.join(BASE_DIR, "images", "data.jpg"),
+    use_container_width=True
+)
+
         st.markdown("### Data Insights")
         st.write(
             "Explore customer behavior, churn patterns, "
@@ -161,7 +165,10 @@ if page == "Overview":
             st.session_state["page"] = "Data Insights"
 
     with col2:
-        st.image("images/model.png", use_container_width=True)
+        st.image(
+    os.path.join(BASE_DIR, "images", "model.png"),
+    use_container_width=True
+)
         st.markdown("### Model Performance")
         st.write(
             "Evaluate model reliability using business-focused metrics, "
@@ -176,7 +183,10 @@ if page == "Overview":
     col3, col4 = st.columns(2)
 
     with col3:
-        st.image("images/churn.png", use_container_width=True)
+        st.image(
+    os.path.join(BASE_DIR, "images", "churn.png"),
+    use_container_width=True
+)
         st.markdown("### Churn Prediction")
         st.write(
             "Predict churn probability for individual customers "
@@ -186,7 +196,10 @@ if page == "Overview":
             st.session_state["page"] = "Churn Prediction"
 
     with col4:
-        st.image("images/retention.jpg", use_container_width=True)
+        st.image(
+    os.path.join(BASE_DIR, "images", "retention.jpg"),
+    use_container_width=True
+)
         st.markdown("### Retention Recommendation")
         st.write(
             "Review the business decision framework that guides "
@@ -596,5 +609,6 @@ elif page == "Retention Recommendation":
         "Actual retention actions are applied after evaluating both churn risk "
         "and customer value."
     )
+
 
 
