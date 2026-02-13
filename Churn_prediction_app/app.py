@@ -6,6 +6,17 @@ import numpy as np
 import joblib
 import os
 
+import joblib
+import os
+
+# Optional safety check
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+clf_weighted = joblib.load(os.path.join(BASE_DIR, "clf_weighted.pkl"))
+clf_smote = joblib.load(os.path.join(BASE_DIR, "clf_smote.pkl"))
+rf_clf = joblib.load(os.path.join(BASE_DIR, "rf_clf.pkl"))
+gb_clf = joblib.load(os.path.join(BASE_DIR, "gb_clf.pkl"))
+
 # --------------------------------------------------
 # Page Configuration (MUST be first Streamlit command)
 # --------------------------------------------------
@@ -196,10 +207,7 @@ if page == "Overview":
             st.session_state["page"] = "Churn Prediction"
 
     with col4:
-        st.image(
-    os.path.join(BASE_DIR, "images", "retention.jpg"),
-    use_container_width=True
-)
+        st.image("images/retention.jpg", use_container_width=True)
         st.markdown("### Retention Recommendation")
         st.write(
             "Review the business decision framework that guides "
@@ -373,88 +381,167 @@ elif page == "Data Insights":
 
 # MODEL PERFORMANCE
 elif page == "Model Performance":
+
     st.title("Model Performance Evaluation")
+
+    from sklearn.metrics import (
+        roc_auc_score,
+        precision_score,
+        recall_score,
+        f1_score,
+        confusion_matrix,
+        roc_curve
+    )
+    import matplotlib.pyplot as plt
+    import shap
 
     X = df.drop(columns=["Churn Value"])
     y = df["Churn Value"]
 
-    y_prob = model.predict_proba(X)[:, 1]
-    y_pred = (y_prob >= 0.55).astype(int)
+    THRESHOLD = 0.55
 
-    from sklearn.metrics import roc_auc_score, confusion_matrix, precision_score, recall_score, f1_score
+    # =========================
+    # Helper function for metrics
+    # =========================
+    def compute_metrics(model, X, y):
+        y_prob = model.predict_proba(X)[:, 1]
+        y_pred = (y_prob >= THRESHOLD).astype(int)
 
-    metrics = pd.DataFrame({
-        "Metric": ["ROC-AUC", "Precision", "Recall", "F1-Score"],
-        "Value": [
-            roc_auc_score(y, y_prob),
-            precision_score(y, y_pred),
-            recall_score(y, y_pred),
-            f1_score(y, y_pred)
-        ]
-    })
+        return pd.DataFrame({
+            "Metric": ["ROC-AUC", "Precision", "Recall", "F1-Score"],
+            "Value": [
+                roc_auc_score(y, y_prob),
+                precision_score(y, y_pred),
+                recall_score(y, y_pred),
+                f1_score(y, y_pred)
+            ]
+        })
 
-    st.subheader("Evaluation Summary")
-    st.dataframe(metrics.style.format({"Value": "{:.3f}"}))
-    st.write(
-    "This table summarizes the overall performance of the churn prediction model. "
-    "ROC–AUC indicates how well the model ranks customers by churn risk across all thresholds. "
-    "Precision, Recall, and F1-Score focus on churn-class performance, which is critical "
-    "because churn datasets are typically imbalanced."
-)
+    # =========================
+    # 1️⃣ Logistic Regression (Class Weighted)
+    # =========================
+    st.subheader("1. Logistic Regression (Class Weighted)")
+    st.dataframe(
+        compute_metrics(clf_weighted, X, y)
+        .style.format({"Value": "{:.3f}"})
+    )
 
+    # =========================
+    # 2️⃣ Logistic Regression + SMOTE
+    # =========================
+    st.subheader("2. Logistic Regression with SMOTE")
+    st.dataframe(
+        compute_metrics(clf_smote, X, y)
+        .style.format({"Value": "{:.3f}"})
+    )
 
-    st.subheader("Confusion Matrix")
-    st.write(confusion_matrix(y, y_pred))
+    # =========================
+    # 3️⃣ Random Forest (Class Weighted)
+    # =========================
+    st.subheader("3. Random Forest")
+    st.dataframe(
+        compute_metrics(rf_clf, X, y)
+        .style.format({"Value": "{:.3f}"})
+    )
 
-    st.write(
-    "This confusion matrix shows how predictions compare with actual churn outcomes.\n\n"
-    "• **0 = Non-Churn**, **1 = Churn**\n"
-    "• **True Negatives (TN)**: Correctly predicted non-churn customers\n"
-    "• **False Positives (FP)**: Non-churn customers incorrectly flagged as churn risk\n"
-    "• **False Negatives (FN)**: Churned customers that were missed by the model\n"
-    "• **True Positives (TP)**: Correctly predicted churn customers\n\n"
-    "From a business perspective, **False Negatives are the most costly**, "
-    "as they represent lost customers who could have been retained."
-)
+    # =========================
+    # 4️⃣ Gradient Boosting
+    # =========================
+    st.subheader("4. Gradient Boosting")
+    st.dataframe(
+        compute_metrics(gb_clf, X, y)
+        .style.format({"Value": "{:.3f}"})
+    )
 
+    # =========================
+    # 5️⃣ Confusion Matrix (Random Forest)
+    # =========================
+    st.subheader("5. Confusion Matrix")
 
-    st.subheader("Key Drivers of Churn")
-    final_model = model.steps[-1][1]
+    y_prob_rf = rf_clf.predict_proba(X)[:, 1]
+    y_pred_rf = (y_prob_rf >= THRESHOLD).astype(int)
 
-    if hasattr(final_model, "feature_importances_"):
-        importance_df = pd.DataFrame({
-            "Feature": model.named_steps["preprocessor"].get_feature_names_out(),
-            "Importance": final_model.feature_importances_
-        }).sort_values("Importance", ascending=False).head(10)
+    cm = confusion_matrix(y, y_pred_rf)
 
-        st.dataframe(importance_df, use_container_width=True)
+    fig, ax = plt.subplots(figsize=(3,2))
+    ax.imshow(cm)
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Actual")
+    ax.set_title("Confusion Matrix – Random Forest")
 
-        st.write(
-    "This table highlights the most influential features driving churn predictions. "
-    "Higher importance values indicate stronger impact on the model’s decision-making. "
-    "These features align with real-world business factors such as customer tenure, "
-    "pricing, engagement, and service quality, making the model explainable and trustworthy."
-)
+    for i in range(2):
+        for j in range(2):
+            ax.text(j, i, cm[i, j], ha="center", va="center")
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width = False)
 
-    else:
-        st.write("Feature importance not available.")
+    # =========================
+    # 6️⃣ ROC Curve & ROC-AUC (Random Forest)
+    # =========================
+    st.subheader("6. ROC Curve")
+
+    fpr, tpr, _ = roc_curve(y, y_prob_rf)
+    auc_score = roc_auc_score(y, y_prob_rf)
+
+    fig, ax = plt.subplots(figsize=(3, 2))
+    ax.plot(fpr, tpr, label=f"AUC = {auc_score:.3f}")
+    ax.plot([0, 1], [0, 1], linestyle="--")
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
+    ax.set_title("ROC Curve – Random Forest")
+    ax.legend()
+
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width = False)
 
 # CHURN PREDICTION
-
 elif page == "Churn Prediction":
+
     st.title("Customer Churn Prediction")
+
+    # =========================
+    # INPUT SECTION
+    # =========================
+    st.subheader("Customer Profile Inputs")
 
     col1, col2 = st.columns(2)
 
     with col1:
-        tenure = st.number_input("Tenure (months)", 0, 120, 12)
-        monthly_charges = st.number_input("Monthly Charges", 0.0, 500.0, 70.0)
-        contract = st.selectbox("Contract Type", ["Month-to-month", "One year", "Two year"])
-        internet_service = st.selectbox("Internet Service", ["Fiber optic", "DSL", "No"])
+        tenure = st.slider(
+            "Tenure (months)",
+            min_value=0,
+            max_value=120,
+            value=12
+        )
+
+        monthly_charges = st.slider(
+            "Monthly Charges",
+            min_value=0.0,
+            max_value=500.0,
+            value=70.0
+        )
+
+        contract = st.selectbox(
+            "Contract Type",
+            ["Month-to-month", "One year", "Two year"]
+        )
+
+        internet_service = st.selectbox(
+            "Internet Service",
+            ["Fiber optic", "DSL", "No"]
+        )
 
     with col2:
-        tech_support = st.selectbox("Tech Support", ["Yes", "No"])
-        online_security = st.selectbox("Online Security", ["Yes", "No"])
+        tech_support = st.selectbox(
+            "Tech Support",
+            ["Yes", "No"]
+        )
+
+        online_security = st.selectbox(
+            "Online Security",
+            ["Yes", "No"]
+        )
+
         payment_method = st.selectbox(
             "Payment Method",
             [
@@ -465,6 +552,9 @@ elif page == "Churn Prediction":
             ]
         )
 
+    # =========================
+    # PREDICTION
+    # =========================
     if st.button("Predict Churn Risk"):
 
         user_input = {
@@ -479,7 +569,11 @@ elif page == "Churn Prediction":
 
         model_input = assemble_features(user_input)
         churn_probability = model.predict_proba(model_input)[0][1]
+        churn_percentage = churn_probability * 100
 
+        # =========================
+        # RISK LEVEL LOGIC (UNCHANGED)
+        # =========================
         if churn_probability >= 0.55:
             risk_level = "High Risk"
         elif churn_probability >= 0.35:
@@ -487,6 +581,9 @@ elif page == "Churn Prediction":
         else:
             risk_level = "Low Risk"
 
+        # =========================
+        # CUSTOMER VALUE LOGIC (UNCHANGED)
+        # =========================
         if tenure == 0:
             customer_value = "Low Value"
         elif tenure >= 12 and monthly_charges >= 60:
@@ -496,6 +593,38 @@ elif page == "Churn Prediction":
         else:
             customer_value = "Low Value"
 
+        # =========================
+        # SPEEDOMETER / GAUGE
+        # =========================
+        import plotly.graph_objects as go
+
+        st.subheader("Churn Risk Indicator")
+
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=churn_percentage,
+            title={"text": "Churn Risk (%)"},
+            gauge={
+                "axis": {"range": [0, 100]},
+                "bar": {"color": "darkred"},
+                "steps": [
+                    {"range": [0, 35], "color": "#4CAF50"},
+                    {"range": [35, 55], "color": "#FFC107"},
+                    {"range": [55, 100], "color": "#F44336"},
+                ],
+                "threshold": {
+                    "line": {"color": "black", "width": 4},
+                    "thickness": 0.75,
+                    "value": churn_percentage,
+                },
+            },
+        ))
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # =========================
+        # TEXT OUTPUT (UNCHANGED)
+        # =========================
         st.subheader("Prediction Result")
         st.write(f"Churn Probability: {churn_probability:.2%}")
         st.write(f"Risk Category: {risk_level}")
@@ -503,6 +632,9 @@ elif page == "Churn Prediction":
         st.subheader("Customer Assessment")
         st.write(f"Customer Value Segment: {customer_value}")
 
+        # =========================
+        # RETENTION DECISION (100% UNCHANGED)
+        # =========================
         st.subheader("Retention Decision")
 
         if risk_level == "High Risk" and customer_value == "High Value":
@@ -609,6 +741,9 @@ elif page == "Retention Recommendation":
         "Actual retention actions are applied after evaluating both churn risk "
         "and customer value."
     )
+
+
+
 
 
 
