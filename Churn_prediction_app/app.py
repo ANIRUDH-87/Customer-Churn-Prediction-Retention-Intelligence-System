@@ -9,6 +9,9 @@ import os
 import joblib
 import os
 
+import os
+st.write("Files in app directory:", os.listdir())
+
 # Optional safety check
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -741,6 +744,7 @@ elif page == "Retention Recommendation":
         "Actual retention actions are applied after evaluating both churn risk "
         "and customer value."
     )
+
 
 
 
