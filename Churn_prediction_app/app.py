@@ -6,8 +6,22 @@ import numpy as np
 import joblib
 import os
 
+import os
+st.write("Files in app directory:", os.listdir())
+
+import joblib
+import os
+
+# Optional safety check
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+clf_weighted = joblib.load(os.path.join(BASE_DIR, "clf_weighted.pkl"))
+clf_smote = joblib.load(os.path.join(BASE_DIR, "clf_smote.pkl"))
+rf_clf = joblib.load(os.path.join(BASE_DIR, "rf_clf.pkl"))
+gb_clf = joblib.load(os.path.join(BASE_DIR, "gb_clf.pkl"))
+
 # --------------------------------------------------
-# Page Configuration (MUST be the first Streamlit command)
+# Page Configuration (MUST be first Streamlit command)
 # --------------------------------------------------
 st.set_page_config(
     page_title="Customer Churn Prediction",
@@ -15,21 +29,9 @@ st.set_page_config(
 )
 
 # --------------------------------------------------
-# Directory handling
+# Base directory
 # --------------------------------------------------
-# app.py is inside: Churn_prediction_app/
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# model files are in the repo root (one level up)
-ROOT_DIR = os.path.dirname(APP_DIR)
-
-# --------------------------------------------------
-# Load trained models
-# --------------------------------------------------
-clf_weighted = joblib.load(os.path.join(ROOT_DIR, "clf_weighted.pkl"))
-clf_smote = joblib.load(os.path.join(ROOT_DIR, "clf_smote.pkl"))
-rf_clf = joblib.load(os.path.join(ROOT_DIR, "rf_clf.pkl"))
-gb_clf = joblib.load(os.path.join(ROOT_DIR, "gb_clf.pkl"))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --------------------------------------------------
 # Load cleaned dataset
