@@ -438,67 +438,6 @@ elif page == "Model Performance":
         st.write("Feature importance not available.")
 
 # CHURN PREDICTION
-elif page == "Churn Prediction":
-
-    st.title("Customer Churn Prediction")
-
-    # =========================
-    # INPUT SECTION
-    # =========================
-    st.subheader("Customer Profile Inputs")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        tenure = st.slider(
-            "Tenure (months)",
-            min_value=0,
-            max_value=120,
-            value=12
-        )
-
-        monthly_charges = st.slider(
-            "Monthly Charges",
-            min_value=0.0,
-            max_value=500.0,
-            value=70.0
-        )
-
-        contract = st.selectbox(
-            "Contract Type",
-            ["Month-to-month", "One year", "Two year"]
-        )
-
-        internet_service = st.selectbox(
-            "Internet Service",
-            ["Fiber optic", "DSL", "No"]
-        )
-
-    with col2:
-        tech_support = st.selectbox(
-            "Tech Support",
-            ["Yes", "No"]
-        )
-
-        online_security = st.selectbox(
-            "Online Security",
-            ["Yes", "No"]
-        )
-
-        payment_method = st.selectbox(
-            "Payment Method",
-            [
-                "Electronic check",
-                "Mailed check",
-                "Bank transfer (automatic)",
-                "Credit card (automatic)"
-            ]
-        )
-
-    # =========================
-    # PREDICTION
-    # =========================
-# CHURN PREDICTION
 
 elif page == "Churn Prediction":
     st.title("Customer Churn Prediction")
@@ -595,6 +534,7 @@ elif page == "Churn Prediction":
             st.write("Low churn risk detected.")
             st.write("• No retention action required.")
 
+
 # RETENTION RECOMMENDATION
 
 elif page == "Retention Recommendation":
@@ -668,6 +608,9 @@ elif page == "Retention Recommendation":
         "Actual retention actions are applied after evaluating both churn risk "
         "and customer value."
     )
+
+
+
 
 
 
