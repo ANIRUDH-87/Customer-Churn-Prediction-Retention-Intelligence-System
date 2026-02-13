@@ -6,20 +6,6 @@ import numpy as np
 import joblib
 import os
 
-import os
-st.write("Files in app directory:", os.listdir())
-
-import joblib
-import os
-
-# Optional safety check
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-clf_weighted = joblib.load(os.path.join(BASE_DIR, "clf_weighted.pkl"))
-clf_smote = joblib.load(os.path.join(BASE_DIR, "clf_smote.pkl"))
-rf_clf = joblib.load(os.path.join(BASE_DIR, "rf_clf.pkl"))
-gb_clf = joblib.load(os.path.join(BASE_DIR, "gb_clf.pkl"))
-
 # --------------------------------------------------
 # Page Configuration (MUST be first Streamlit command)
 # --------------------------------------------------
@@ -27,6 +13,20 @@ st.set_page_config(
     page_title="Customer Churn Prediction",
     layout="wide"
 )
+
+# --------------------------------------------------
+# Correct directory handling
+# --------------------------------------------------
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PARENT_DIR = os.path.dirname(CURRENT_DIR)
+
+# --------------------------------------------------
+# Load trained models (from repo root)
+# --------------------------------------------------
+clf_weighted = joblib.load(os.path.join(PARENT_DIR, "clf_weighted.pkl"))
+clf_smote = joblib.load(os.path.join(PARENT_DIR, "clf_smote.pkl"))
+rf_clf = joblib.load(os.path.join(PARENT_DIR, "rf_clf.pkl"))
+gb_clf = joblib.load(os.path.join(PARENT_DIR, "gb_clf.pkl"))
 
 # --------------------------------------------------
 # Base directory
@@ -744,6 +744,7 @@ elif page == "Retention Recommendation":
         "Actual retention actions are applied after evaluating both churn risk "
         "and customer value."
     )
+
 
 
 
