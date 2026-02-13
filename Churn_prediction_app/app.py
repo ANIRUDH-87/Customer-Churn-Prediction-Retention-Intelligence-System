@@ -6,6 +6,7 @@ import numpy as np
 import joblib
 import os
 
+
 # --------------------------------------------------
 # Page Configuration (MUST be first Streamlit command)
 # --------------------------------------------------
@@ -13,20 +14,6 @@ st.set_page_config(
     page_title="Customer Churn Prediction",
     layout="wide"
 )
-
-# --------------------------------------------------
-# Correct directory handling
-# --------------------------------------------------
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-PARENT_DIR = os.path.dirname(CURRENT_DIR)
-
-# --------------------------------------------------
-# Load trained models (from repo root)
-# --------------------------------------------------
-clf_weighted = joblib.load(os.path.join(PARENT_DIR, "clf_weighted.pkl"))
-clf_smote = joblib.load(os.path.join(PARENT_DIR, "clf_smote.pkl"))
-rf_clf = joblib.load(os.path.join(PARENT_DIR, "rf_clf.pkl"))
-gb_clf = joblib.load(os.path.join(PARENT_DIR, "gb_clf.pkl"))
 
 # --------------------------------------------------
 # Base directory
@@ -384,118 +371,71 @@ elif page == "Data Insights":
 
 # MODEL PERFORMANCE
 elif page == "Model Performance":
-
     st.title("Model Performance Evaluation")
-
-    from sklearn.metrics import (
-        roc_auc_score,
-        precision_score,
-        recall_score,
-        f1_score,
-        confusion_matrix,
-        roc_curve
-    )
-    import matplotlib.pyplot as plt
-    import shap
 
     X = df.drop(columns=["Churn Value"])
     y = df["Churn Value"]
 
-    THRESHOLD = 0.55
+    y_prob = model.predict_proba(X)[:, 1]
+    y_pred = (y_prob >= 0.55).astype(int)
 
-    # =========================
-    # Helper function for metrics
-    # =========================
-    def compute_metrics(model, X, y):
-        y_prob = model.predict_proba(X)[:, 1]
-        y_pred = (y_prob >= THRESHOLD).astype(int)
+    from sklearn.metrics import roc_auc_score, confusion_matrix, precision_score, recall_score, f1_score
 
-        return pd.DataFrame({
-            "Metric": ["ROC-AUC", "Precision", "Recall", "F1-Score"],
-            "Value": [
-                roc_auc_score(y, y_prob),
-                precision_score(y, y_pred),
-                recall_score(y, y_pred),
-                f1_score(y, y_pred)
-            ]
-        })
+    metrics = pd.DataFrame({
+        "Metric": ["ROC-AUC", "Precision", "Recall", "F1-Score"],
+        "Value": [
+            roc_auc_score(y, y_prob),
+            precision_score(y, y_pred),
+            recall_score(y, y_pred),
+            f1_score(y, y_pred)
+        ]
+    })
 
-    # =========================
-    # 1️⃣ Logistic Regression (Class Weighted)
-    # =========================
-    st.subheader("1. Logistic Regression (Class Weighted)")
-    st.dataframe(
-        compute_metrics(clf_weighted, X, y)
-        .style.format({"Value": "{:.3f}"})
-    )
+    st.subheader("Evaluation Summary")
+    st.dataframe(metrics.style.format({"Value": "{:.3f}"}))
+    st.write(
+    "This table summarizes the overall performance of the churn prediction model. "
+    "ROC–AUC indicates how well the model ranks customers by churn risk across all thresholds. "
+    "Precision, Recall, and F1-Score focus on churn-class performance, which is critical "
+    "because churn datasets are typically imbalanced."
+)
 
-    # =========================
-    # 2️⃣ Logistic Regression + SMOTE
-    # =========================
-    st.subheader("2. Logistic Regression with SMOTE")
-    st.dataframe(
-        compute_metrics(clf_smote, X, y)
-        .style.format({"Value": "{:.3f}"})
-    )
 
-    # =========================
-    # 3️⃣ Random Forest (Class Weighted)
-    # =========================
-    st.subheader("3. Random Forest")
-    st.dataframe(
-        compute_metrics(rf_clf, X, y)
-        .style.format({"Value": "{:.3f}"})
-    )
+    st.subheader("Confusion Matrix")
+    st.write(confusion_matrix(y, y_pred))
 
-    # =========================
-    # 4️⃣ Gradient Boosting
-    # =========================
-    st.subheader("4. Gradient Boosting")
-    st.dataframe(
-        compute_metrics(gb_clf, X, y)
-        .style.format({"Value": "{:.3f}"})
-    )
+    st.write(
+    "This confusion matrix shows how predictions compare with actual churn outcomes.\n\n"
+    "• **0 = Non-Churn**, **1 = Churn**\n"
+    "• **True Negatives (TN)**: Correctly predicted non-churn customers\n"
+    "• **False Positives (FP)**: Non-churn customers incorrectly flagged as churn risk\n"
+    "• **False Negatives (FN)**: Churned customers that were missed by the model\n"
+    "• **True Positives (TP)**: Correctly predicted churn customers\n\n"
+    "From a business perspective, **False Negatives are the most costly**, "
+    "as they represent lost customers who could have been retained."
+)
 
-    # =========================
-    # 5️⃣ Confusion Matrix (Random Forest)
-    # =========================
-    st.subheader("5. Confusion Matrix")
 
-    y_prob_rf = rf_clf.predict_proba(X)[:, 1]
-    y_pred_rf = (y_prob_rf >= THRESHOLD).astype(int)
+    st.subheader("Key Drivers of Churn")
+    final_model = model.steps[-1][1]
 
-    cm = confusion_matrix(y, y_pred_rf)
+    if hasattr(final_model, "feature_importances_"):
+        importance_df = pd.DataFrame({
+            "Feature": model.named_steps["preprocessor"].get_feature_names_out(),
+            "Importance": final_model.feature_importances_
+        }).sort_values("Importance", ascending=False).head(10)
 
-    fig, ax = plt.subplots(figsize=(3,2))
-    ax.imshow(cm)
-    ax.set_xlabel("Predicted")
-    ax.set_ylabel("Actual")
-    ax.set_title("Confusion Matrix – Random Forest")
+        st.dataframe(importance_df, use_container_width=True)
 
-    for i in range(2):
-        for j in range(2):
-            ax.text(j, i, cm[i, j], ha="center", va="center")
-    plt.tight_layout()
-    st.pyplot(fig, use_container_width = False)
+        st.write(
+    "This table highlights the most influential features driving churn predictions. "
+    "Higher importance values indicate stronger impact on the model’s decision-making. "
+    "These features align with real-world business factors such as customer tenure, "
+    "pricing, engagement, and service quality, making the model explainable and trustworthy."
+)
 
-    # =========================
-    # 6️⃣ ROC Curve & ROC-AUC (Random Forest)
-    # =========================
-    st.subheader("6. ROC Curve")
-
-    fpr, tpr, _ = roc_curve(y, y_prob_rf)
-    auc_score = roc_auc_score(y, y_prob_rf)
-
-    fig, ax = plt.subplots(figsize=(3, 2))
-    ax.plot(fpr, tpr, label=f"AUC = {auc_score:.3f}")
-    ax.plot([0, 1], [0, 1], linestyle="--")
-    ax.set_xlabel("False Positive Rate")
-    ax.set_ylabel("True Positive Rate")
-    ax.set_title("ROC Curve – Random Forest")
-    ax.legend()
-
-    plt.tight_layout()
-    st.pyplot(fig, use_container_width = False)
+    else:
+        st.write("Feature importance not available.")
 
 # CHURN PREDICTION
 elif page == "Churn Prediction":
@@ -744,6 +684,7 @@ elif page == "Retention Recommendation":
         "Actual retention actions are applied after evaluating both churn risk "
         "and customer value."
     )
+
 
 
 
