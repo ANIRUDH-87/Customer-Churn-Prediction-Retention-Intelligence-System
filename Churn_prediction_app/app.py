@@ -498,6 +498,32 @@ elif page == "Churn Prediction":
     # =========================
     # PREDICTION
     # =========================
+# CHURN PREDICTION
+
+elif page == "Churn Prediction":
+    st.title("Customer Churn Prediction")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        tenure = st.number_input("Tenure (months)", 0, 120, 12)
+        monthly_charges = st.number_input("Monthly Charges", 0.0, 500.0, 70.0)
+        contract = st.selectbox("Contract Type", ["Month-to-month", "One year", "Two year"])
+        internet_service = st.selectbox("Internet Service", ["Fiber optic", "DSL", "No"])
+
+    with col2:
+        tech_support = st.selectbox("Tech Support", ["Yes", "No"])
+        online_security = st.selectbox("Online Security", ["Yes", "No"])
+        payment_method = st.selectbox(
+            "Payment Method",
+            [
+                "Electronic check",
+                "Mailed check",
+                "Bank transfer (automatic)",
+                "Credit card (automatic)"
+            ]
+        )
+
     if st.button("Predict Churn Risk"):
 
         user_input = {
@@ -512,11 +538,7 @@ elif page == "Churn Prediction":
 
         model_input = assemble_features(user_input)
         churn_probability = model.predict_proba(model_input)[0][1]
-        churn_percentage = churn_probability * 100
 
-        # =========================
-        # RISK LEVEL LOGIC (UNCHANGED)
-        # =========================
         if churn_probability >= 0.55:
             risk_level = "High Risk"
         elif churn_probability >= 0.35:
@@ -524,9 +546,6 @@ elif page == "Churn Prediction":
         else:
             risk_level = "Low Risk"
 
-        # =========================
-        # CUSTOMER VALUE LOGIC (UNCHANGED)
-        # =========================
         if tenure == 0:
             customer_value = "Low Value"
         elif tenure >= 12 and monthly_charges >= 60:
@@ -536,38 +555,6 @@ elif page == "Churn Prediction":
         else:
             customer_value = "Low Value"
 
-        # =========================
-        # SPEEDOMETER / GAUGE
-        # =========================
-        import plotly.graph_objects as go
-
-        st.subheader("Churn Risk Indicator")
-
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=churn_percentage,
-            title={"text": "Churn Risk (%)"},
-            gauge={
-                "axis": {"range": [0, 100]},
-                "bar": {"color": "darkred"},
-                "steps": [
-                    {"range": [0, 35], "color": "#4CAF50"},
-                    {"range": [35, 55], "color": "#FFC107"},
-                    {"range": [55, 100], "color": "#F44336"},
-                ],
-                "threshold": {
-                    "line": {"color": "black", "width": 4},
-                    "thickness": 0.75,
-                    "value": churn_percentage,
-                },
-            },
-        ))
-
-        st.plotly_chart(fig, use_container_width=True)
-
-        # =========================
-        # TEXT OUTPUT (UNCHANGED)
-        # =========================
         st.subheader("Prediction Result")
         st.write(f"Churn Probability: {churn_probability:.2%}")
         st.write(f"Risk Category: {risk_level}")
@@ -575,9 +562,6 @@ elif page == "Churn Prediction":
         st.subheader("Customer Assessment")
         st.write(f"Customer Value Segment: {customer_value}")
 
-        # =========================
-        # RETENTION DECISION (100% UNCHANGED)
-        # =========================
         st.subheader("Retention Decision")
 
         if risk_level == "High Risk" and customer_value == "High Value":
