@@ -197,7 +197,10 @@ if page == "Overview":
             st.session_state["page"] = "Churn Prediction"
 
     with col4:
-        st.image("images/retention.jpg", use_container_width=True)
+        st.image(
+    os.path.join(BASE_DIR, "images", "retention.jpg"),
+    use_container_width=True
+)
         st.markdown("### Retention Recommendation")
         st.write(
             "Review the business decision framework that guides "
@@ -608,6 +611,7 @@ elif page == "Retention Recommendation":
         "Actual retention actions are applied after evaluating both churn risk "
         "and customer value."
     )
+
 
 
 
