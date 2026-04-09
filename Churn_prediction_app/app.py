@@ -1,627 +1,608 @@
-# Customer Churn Prediction Application
-
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
-import os
+import plotly.express as px
+import plotly.graph_objects as go
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+# ---------------------------
+# CONFIG
+# ---------------------------
+st.set_page_config(page_title="Churn Dashboard", layout="wide")
 
+# ---------------------------
+# CUSTOM CSS
+# ---------------------------
+st.markdown("""
+<style>
+.main {
+    background-color: #0E1117;
+}
+.block-container {
+    padding-top: 0.5rem;
+}
 
-# --------------------------------------------------
-# Page Configuration (MUST be first Streamlit command)
-# --------------------------------------------------
-st.set_page_config(
-    page_title="Customer Churn Prediction",
-    layout="wide"
-)
+/* KPI CARD */
+.kpi-card {
+    background-color: #1c1f26;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid #333;
+    text-align: left;
+}
 
-# --------------------------------------------------
-# Base directory
-# --------------------------------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+/* TOP ROW (TITLE + ARROW) */
+.kpi-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 
-# --------------------------------------------------
-# Load cleaned dataset
-# --------------------------------------------------
+/* TITLE */
+.kpi-title {
+    font-size: 11px;
+    color: #9aa0a6;
+}
+
+/* VALUE */
+.kpi-value {
+    font-size: 20px;
+    font-weight: bold;
+    color: white;
+    margin-top: 5px;
+}
+
+/* SMALL TEXT */
+.kpi-sub {
+    font-size: 9px;
+    color: #6c757d;
+    margin-top: 4px;
+}
+
+/* ARROWS */
+.up {
+    color: #00c853;
+    font-size: 14px;
+}
+
+.down {
+    color: #ff5252;
+    font-size: 14px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------------------
+# LOAD DATA
+# ---------------------------
 @st.cache_data
 def load_data():
-    data_path = os.path.join(BASE_DIR, "data", "telco_churn_cleaned.csv")
-    return pd.read_csv(data_path)
+    return pd.read_csv("data/telco_churn_cleaned.csv")
 
 df = load_data()
 
-# --------------------------------------------------
-# Load trained model
-# --------------------------------------------------
+df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+
+# ---------------------------
+# CREATE CURRENT vs PREVIOUS SPLIT
+# ---------------------------
+split_index = int(len(df) * 0.5)
+
+prev_df = df.iloc[:split_index]
+curr_df = df.iloc[split_index:]
+
+# ---------------------------
+# LOAD MODEL
+# ---------------------------
 @st.cache_resource
 def load_model():
-    model_path = os.path.join(BASE_DIR, "model", "final_churn_model.pkl")
-    return joblib.load(model_path)
+    return joblib.load("model/final_churn_model.pkl")
 
 model = load_model()
 
-# Features
+# ---------------------------
+# MAIN TITLE (LEFT)
+# ---------------------------
+st.markdown("""
+<h3 style='text-align: left; color: white; margin-top: 20px;'>
+Customer Churn Prediction & Retention System
+</h3>
+""", unsafe_allow_html=True)
 
-EXPECTED_FEATURES = list(model.feature_names_in_)
+# ---------------------------
+# KPI CALCULATIONS
+# ---------------------------
+# ---------------------------
+# KPI CALCULATIONS (REAL)
+# ---------------------------
 
-def get_feature_groups(trained_model):
-    preprocessor = trained_model.named_steps["preprocessor"]
-    num, cat = [], []
+# CURRENT VALUES
+total_customers = len(curr_df)
+churn_rate = curr_df["Churn Value"].mean() * 100
+avg_tenure = curr_df["Tenure Months"].mean()
+avg_charges = curr_df["Monthly Charges"].mean()
+high_risk_customers = curr_df[curr_df["Churn Value"] == 1].shape[0]
+revenue_at_risk = curr_df[curr_df["Churn Value"] == 1]["Monthly Charges"].sum()
 
-    for name, _, cols in preprocessor.transformers_:
-        if name == "num":
-            num = list(cols)
-        elif name == "cat":
-            cat = list(cols)
-    return num, cat
+# PREVIOUS VALUES
+prev_total = len(prev_df)
+prev_churn = prev_df["Churn Value"].mean() * 100
+prev_tenure = prev_df["Tenure Months"].mean()
+prev_charges = prev_df["Monthly Charges"].mean()
+prev_high_risk = prev_df[prev_df["Churn Value"] == 1].shape[0]
+prev_revenue = prev_df[prev_df["Churn Value"] == 1]["Monthly Charges"].sum()
 
-NUMERIC_FEATURES, CATEGORICAL_FEATURES = get_feature_groups(model)
+def calc_change(curr, prev):
+    if prev == 0:
+        return 0
+    return ((curr - prev) / prev) * 100
 
-# Feature Assembly
-def assemble_features(user_input):
-    data = {col: 0 for col in EXPECTED_FEATURES}
+chg_total = calc_change(total_customers, prev_total)
+chg_churn = calc_change(churn_rate, prev_churn)
+chg_tenure = calc_change(avg_tenure, prev_tenure)
+chg_charges = calc_change(avg_charges, prev_charges)
+chg_risk = calc_change(high_risk_customers, prev_high_risk)
+chg_revenue = calc_change(revenue_at_risk, prev_revenue)
+# ---------------------------
+# KPI ROW
+# ---------------------------
+col1, col2, col3, col4, col5, col6 = st.columns(6)
 
-    data["Tenure Months"] = user_input["tenure"]
-    data["Monthly Charges"] = user_input["monthly_charges"]
-    data["Contract"] = user_input["contract"]
-    data["Internet Service"] = user_input["internet_service"]
-    data["Tech Support"] = user_input["tech_support"]
-    data["Online Security"] = user_input["online_security"]
-    data["Payment Method"] = user_input["payment_method"]
+col1.markdown(f"""
+<div class="kpi-card">
+    <div class="kpi-top">
+        <div class="kpi-title">Total Customers</div>
+        <div class="{'up' if chg_total >= 0 else 'down'}">
+{'▲' if chg_total >= 0 else '▼'} {abs(chg_total):.1f}%
+</div>
+    </div>
+    <div class="kpi-value">{total_customers}</div>
+    <div class="kpi-sub">vs previous period</div>
+</div>
+""", unsafe_allow_html=True)
 
-    tenure_safe = max(user_input["tenure"], 1)
+col2.markdown(f"""
+<div class="kpi-card">
+    <div class="kpi-top">
+        <div class="kpi-title">Churn Rate</div>
+        <div class="{'up' if chg_churn >= 0 else 'down'}">
+{'▲' if chg_churn >= 0 else '▼'} {abs(chg_churn):.1f}%
+</div>
+    </div>
+    <div class="kpi-value">{churn_rate:.2f}%</div>
+    <div class="kpi-sub">vs previous period</div>
+</div>
+""", unsafe_allow_html=True)
 
-    if "Charges per Tenure" in data:
-        data["Charges per Tenure"] = user_input["monthly_charges"] / tenure_safe
+col3.markdown(f"""
+<div class="kpi-card">
+    <div class="kpi-top">
+        <div class="kpi-title">Avg Tenure</div>
+        <div class="{'up' if chg_tenure >= 0 else 'down'}">
+{'▲' if chg_tenure >= 0 else '▼'} {abs(chg_tenure):.1f}%
+</div>
+    </div>
+    <div class="kpi-value">{avg_tenure:.1f}</div>
+    <div class="kpi-sub">vs previous period</div>
+</div>
+""", unsafe_allow_html=True)
 
-    if "Early Tenure Flag" in data:
-        data["Early Tenure Flag"] = 1 if user_input["tenure"] < 12 else 0
+col4.markdown(f"""
+<div class="kpi-card">
+    <div class="kpi-top">
+        <div class="kpi-title">Avg Charges</div>
+        <div class="{'up' if chg_charges >= 0 else 'down'}">
+{'▲' if chg_charges >= 0 else '▼'} {abs(chg_charges):.1f}%
+</div>
+    </div>
+    <div class="kpi-value">${avg_charges:.2f}</div>
+    <div class="kpi-sub">vs previous period</div>
+</div>
+""", unsafe_allow_html=True)
 
-    neutral_defaults = {
-        "Gender": "Male",
-        "Senior Citizen": "No",
-        "Partner": "No",
-        "Dependents": "No",
-        "Phone Service": "Yes",
-        "Multiple Lines": "No",
-        "Paperless Billing": "Yes",
-        "Country": "United States",
-        "State": "California",
-        "City": "Unknown",
-        "Zip Code": 90001,
-        "Latitude": 34.0,
-        "Longitude": -118.0,
-        "Count": 1
-    }
+col5.markdown(f"""
+<div class="kpi-card">
+    <div class="kpi-top">
+        <div class="kpi-title">High Risk Customers</div>
+        <div class="{'up' if chg_risk >= 0 else 'down'}">
+{'▲' if chg_risk >= 0 else '▼'} {abs(chg_risk):.1f}%
+</div>
+    </div>
+    <div class="kpi-value">{high_risk_customers}</div>
+    <div class="kpi-sub">vs previous period</div>
+</div>
+""", unsafe_allow_html=True)
 
-    for col, val in neutral_defaults.items():
-        if col in data:
-            data[col] = val
+col6.markdown(f"""
+<div class="kpi-card">
+    <div class="kpi-top">
+        <div class="kpi-title">Revenue at Risk</div>
+        <div class="{'up' if chg_revenue >= 0 else 'down'}">
+{'▲' if chg_revenue >= 0 else '▼'} {abs(chg_revenue):.1f}%
+</div>
+    </div>
+    <div class="kpi-value">${revenue_at_risk:,.0f}</div>
+    <div class="kpi-sub">vs previous period</div>
+</div>
+""", unsafe_allow_html=True)
 
-    df_input = pd.DataFrame([data])
+# ---------------------------
+# INFO CARDS (4 BOXES)
+# ---------------------------
 
-    for col in NUMERIC_FEATURES:
-        if col in df_input.columns:
-            df_input[col] = pd.to_numeric(df_input[col], errors="coerce")
+# CSS for small cards
+st.markdown("""
+<style>
+.info-card {
+    background-color: #1c1f26;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid #333;
+    margin-bottom: 5px;
+}
 
-    for col in CATEGORICAL_FEATURES:
-        if col in df_input.columns:
-            df_input[col] = df_input[col].astype(str)
+.info-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: white;
+    font-size: 13px;
+}
 
-    return df_input
+.arrow {
+    color: #9aa0a6;
+    font-size: 14px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# 4 columns
+c1, c2, c3, c4 = st.columns(4)
+
+# ---------------------------
+# BOX 1: ML MODELS
+# ---------------------------
+with c1:
+    with st.expander("ML Models Used "):
+        st.markdown("""
+        - Logistic Regression  
+        - Random Forest  
+        - Gradient Boosting  
+        """)
+
+# ---------------------------
+# BOX 2: CUSTOMER SEGMENTS
+# ---------------------------
+with c2:
+    with st.expander("Customer Segments "):
+        st.markdown("""
+        - Senior Citizens → Higher churn  
+        - Low Tenure Customers → High churn  
+        - High Monthly Charges → High churn  
+        """)
+
+# ---------------------------
+# BOX 3: CHURN DRIVERS
+# ---------------------------
+with c3:
+    with st.expander("Churn Drivers "):
+        st.markdown("""
+        - Month-to-Month Contracts → High churn  
+        - Short Tenure → High risk  
+        - Expensive Plans → More churn  
+        """)
+
+# ---------------------------
+# BOX 4: RETENTION STRATEGY
+# ---------------------------
+with c4:
+    with st.expander("Retention Strategy "):
+        st.markdown("""
+        - Offer discounts to high-risk users  
+        - Encourage long-term contracts  
+        - Target senior citizens with plans  
+        """)
 
 
-# Sidebar Navigation
-st.sidebar.title("Navigation")
-if "page" not in st.session_state:
-    st.session_state["page"] = "Overview"
 
-page = st.sidebar.radio(
-    "Select Section",
-    [
-        "Overview",
-        "Data Insights",
-        "Model Performance",
-        "Churn Prediction",
-        "Retention Recommendation"
-    ],
-    index=[
-        "Overview",
-        "Data Insights",
-        "Model Performance",
-        "Churn Prediction",
-        "Retention Recommendation"
-    ].index(st.session_state["page"])
-)
+# ---------------------------
+# HELPER: GET FEATURE IMPORTANCE FROM PIPELINE
+# ---------------------------
+def get_feature_importance(model, X):
+    try:
+        # if pipeline → get last step
+        if hasattr(model, "named_steps"):
+            last_model = list(model.named_steps.values())[-1]
+        else:
+            last_model = model
+
+        if hasattr(last_model, "feature_importances_"):
+            return pd.Series(last_model.feature_importances_, index=X.columns)
+        else:
+            return None
+    except:
+        return None
 
 
-# OVERVIEW
-if page == "Overview":
-    st.title("Customer Churn Prediction System")
+# ---------------------------
+# CHART ROW 1
+# ---------------------------
+r1c1, r1c2, r1c3 = st.columns(3)
 
-    st.write(
-        "This application demonstrates an end-to-end machine learning solution "
-        "for predicting customer churn and supporting business-driven retention decisions."
+# 1. CHURN PIE
+with r1c1:
+    churn_counts = curr_df["Churn Value"].value_counts()
+
+    fig1 = go.Figure(data=[go.Pie(
+        labels=["Retained", "Churned"],
+        values=[churn_counts[0], churn_counts[1]],
+        hole=0.7,
+        marker=dict(colors=["#1f77b4", "#ff7f0e"]),
+        textinfo='label+value',
+        textfont=dict(size=12, color="white")
+    )])
+
+    churn_percent = (churn_counts[1] / churn_counts.sum()) * 100
+
+    fig1.update_layout(
+        title="Churn",
+        height=350,
+
+        margin=dict(t=50, b=0, l=50, r=100),
+
+        annotations=[dict(
+            text=f"{churn_percent:.1f}%",
+            x=0.5, y=0.5,
+            showarrow=False,
+            font=dict(size=18, color="white")
+        )],
+        paper_bgcolor="#0E1117",
+        plot_bgcolor="#0E1117",
+        font=dict(color="white"),
+        legend=dict(orientation="h", x=0.18, y=-0.1)
     )
 
-    st.divider()
-    st.subheader("Explore the Application")
+    st.plotly_chart(fig1, use_container_width=True)
 
-    # ROW 1
-    
-    col1, col2 = st.columns(2)
 
-    with col1:
-        st.image(
-    os.path.join(BASE_DIR, "images", "data.jpg"),
-    use_container_width=True
-)
+# 2. TENURE HIST
+with r1c2:
+    fig2 = px.histogram(
+        curr_df,
+        x="Tenure Months",
+        color="Churn Value",
+        nbins=20,
+        barmode="overlay",
+        
+        color_discrete_map={0:"#1f77b4", 1:"#ff7f0e"}
+    )
 
-        st.markdown("### Data Insights")
-        st.write(
-            "Explore customer behavior, churn patterns, "
-            "and key business drivers through structured analysis."
+    fig2.update_layout(
+        title="Tenure",
+        height=360,
+        paper_bgcolor="#0E1117",
+        plot_bgcolor="#0E1117",
+        font=dict(color="white")
+    )
+
+    st.plotly_chart(fig2, use_container_width=True)
+
+
+# 3. CHARGES BOX
+with r1c3:
+    fig3 = px.box(
+        curr_df,
+        x="Churn Value",
+        y="Monthly Charges",
+        color="Churn Value",
+        color_discrete_map={0:"#1f77b4", 1:"#ff7f0e"}
+    )
+
+    fig3.update_layout(
+        title="Charges",
+        height=355,
+        paper_bgcolor="#0E1117",
+        plot_bgcolor="#0E1117",
+        font=dict(color="white"),
+        showlegend=False
+    )
+
+    st.plotly_chart(fig3, use_container_width=True)
+
+
+# ---------------------------
+# CHART ROW 2
+# ---------------------------
+r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+
+# 4. CONTRACT
+with r2c1:
+    contract = curr_df.groupby("Contract")["Churn Value"].mean().reset_index()
+
+    fig4 = px.bar(contract, x="Contract", y="Churn Value",
+                  color_discrete_sequence=["#ff7f0e"])
+
+    fig4.update_layout(
+        title="Contract",
+        height=350,
+        paper_bgcolor="#0E1117",
+        plot_bgcolor="#0E1117",
+        font=dict(color="white")
+    )
+
+    st.plotly_chart(fig4, use_container_width=True)
+
+
+# 5. PAYMENT
+with r2c2:
+    pay = curr_df.groupby("Payment Method")["Churn Value"].mean().reset_index()
+
+    fig5 = px.bar(pay, x="Payment Method", y="Churn Value",
+                  color_discrete_sequence=["#ff7f0e"])
+
+    fig5.update_layout(
+        title="Payment",
+        height=350,
+        paper_bgcolor="#0E1117",
+        plot_bgcolor="#0E1117",
+        font=dict(color="white")
+    )
+
+    st.plotly_chart(fig5, use_container_width=True)
+
+
+# 6. PAYMENT SPLIT
+with r2c3:
+    pay_split = curr_df.groupby(["Payment Method", "Churn Value"]).size().reset_index(name="count")
+
+    fig6 = px.bar(
+        pay_split,
+        x="Payment Method",
+        y="count",
+        color="Churn Value",
+        barmode="group",
+        color_discrete_map={0:"#1f77b4", 1:"#ff7f0e"}
+    )
+
+    fig6.update_layout(
+        title="Pay Split",
+        height=350,
+        width= 400,
+        paper_bgcolor="#0E1117",
+        plot_bgcolor="#0E1117",
+        font=dict(color="white")
+    )
+
+    st.plotly_chart(fig6, use_container_width=True)
+
+
+# 7. FEATURE IMPORTANCE (FIXED)
+with r2c4:
+    X = curr_df.drop(columns=["Churn Value"])
+
+    feat_imp = get_feature_importance(model, X)
+
+    if feat_imp is not None:
+        feat_imp = feat_imp.sort_values(ascending=False).head(5)
+
+        fig7 = px.bar(
+            feat_imp,
+            x=feat_imp.values,
+            y=feat_imp.index,
+            orientation='h',
+            color_discrete_sequence=["#1f77b4"]
         )
-        if st.button("Go to Data Insights"):
-            st.session_state["page"] = "Data Insights"
-
-    with col2:
-        st.image(
-    os.path.join(BASE_DIR, "images", "model.png"),
-    use_container_width=True
-)
-        st.markdown("### Model Performance")
-        st.write(
-            "Evaluate model reliability using business-focused metrics, "
-            "error analysis, and feature importance."
-        )
-        if st.button("Go to Model Performance"):
-            st.session_state["page"] = "Model Performance"
-
-   
-
-    # ROW 2
-    col3, col4 = st.columns(2)
-
-    with col3:
-        st.image(
-    os.path.join(BASE_DIR, "images", "churn.png"),
-    use_container_width=True
-)
-        st.markdown("### Churn Prediction")
-        st.write(
-            "Predict churn probability for individual customers "
-            "and receive risk-based retention recommendations."
-        )
-        if st.button("Go to Churn Prediction"):
-            st.session_state["page"] = "Churn Prediction"
-
-    with col4:
-        st.image(
-    os.path.join(BASE_DIR, "images", "retention.jpg"),
-    use_container_width=True
-)
-        st.markdown("### Retention Recommendation")
-        st.write(
-            "Review the business decision framework that guides "
-            "cost-effective customer retention strategies."
-        )
-        if st.button("Go to Retention Recommendation"):
-            st.session_state["page"] = "Retention Recommendation"
-
-
-
-
-# DATA INSIGHTS
-elif page == "Data Insights":
-    st.title("Data Insights: Understanding Customer Churn")
-
-    st.write(
-        "This section presents business-driven insights derived from the "
-        "cleaned historical dataset used to train the churn prediction model. "
-        "The goal is to understand why customers churn and which segments "
-        "require targeted retention strategies."
-    )
-
-    st.divider()
-
-    # 1. Target Understanding
-    st.subheader("1. Churn Distribution (Target Understanding)")
-
-    churn_dist = df["Churn Value"].value_counts(normalize=True) * 100
-    churn_dist_df = churn_dist.rename({0: "Non-Churn", 1: "Churn"})
-
-    st.write("Churn vs Non-Churn Percentage:")
-    st.write(churn_dist_df)
-
-    st.bar_chart(churn_dist_df)
-
-    st.write(
-        "The dataset shows a clear class imbalance, with fewer churned customers "
-        "compared to retained customers. This confirms the need for imbalance-aware "
-        "modeling and business-focused evaluation metrics."
-    )
-
-    st.divider()
-
-    # 2. Tenure & Customer Lifecycle
-    st.subheader("2. Tenure and Customer Lifecycle Analysis")
-
-    tenure_summary = df.groupby("Churn Value")["Tenure Months"].mean()
-    tenure_summary.index = ["Non-Churn", "Churn"]
-
-    st.write("Average Tenure (Months):")
-    st.write(tenure_summary)
-
-    st.bar_chart(tenure_summary)
-
-    st.write(
-        "Churned customers typically have much lower tenure, indicating that "
-        "early-stage customers are the most vulnerable to churn."
-    )
-
-    st.divider()
-
-    # 3. Monetary & Customer Value Impact
-    st.subheader("3. Monetary and Customer Value Impact")
-
-    charges_summary = df.groupby("Churn Value")["Monthly Charges"].mean()
-    cltv_summary = df.groupby("Churn Value")["CLTV"].mean()
-
-    charges_summary.index = ["Non-Churn", "Churn"]
-    cltv_summary.index = ["Non-Churn", "Churn"]
-
-    st.write("Average Monthly Charges:")
-    st.write(charges_summary)
-    st.bar_chart(charges_summary)
-
-    st.write("Average Customer Lifetime Value (CLTV):")
-    st.write(cltv_summary)
-    st.bar_chart(cltv_summary)
-
-    st.write(
-        "Churn among high-value customers leads to significant revenue loss, "
-        "making selective and cost-aware retention strategies essential."
-    )
-
-    st.divider()
-
-    # 4. Contract & Payment Behaviour
-    st.subheader("4. Contract Type and Payment Behaviour")
-
-    contract_churn = df.groupby("Contract")["Churn Value"].mean().sort_values(ascending=False)
-    payment_churn = df.groupby("Payment Method")["Churn Value"].mean().sort_values(ascending=False)
-
-    st.write("Churn Rate by Contract Type:")
-    st.write(contract_churn)
-    st.bar_chart(contract_churn)
-
-    st.write("Churn Rate by Payment Method:")
-    st.write(payment_churn)
-    st.bar_chart(payment_churn)
-
-    st.write(
-        "Customers on month-to-month contracts and electronic check payments "
-        "show higher churn rates, indicating lower long-term commitment."
-    )
-
-    st.divider()
-
-    
-    # 5. Service & Usage Behaviour
-    st.subheader("5. Service and Usage Behaviour")
-
-    service_cols = [
-        "Internet Service",
-        "Online Security",
-        "Tech Support",
-        "Streaming TV",
-        "Streaming Movies"
-    ]
-
-    for col in service_cols:
-        if col in df.columns:
-            service_churn = df.groupby(col)["Churn Value"].mean().sort_values(ascending=False)
-            st.write(f"Churn Rate by {col}:")
-            st.write(service_churn)
-            st.bar_chart(service_churn)
-
-    st.write(
-        "Customers lacking value-added services such as security and technical support "
-        "tend to churn more, suggesting dissatisfaction or unmet expectations."
-    )
-
-    st.divider()
-
-     
-    # 6. Customer Demographics
-    st.subheader("6. Customer Demographics")
-
-    demo_cols = ["Senior Citizen", "Partner", "Dependents"]
-
-    for col in demo_cols:
-        if col in df.columns:
-            demo_churn = df.groupby(col)["Churn Value"].mean()
-            st.write(f"Churn Rate by {col}:")
-            st.write(demo_churn)
-            st.bar_chart(demo_churn)
-
-    st.write(
-        "Certain demographic segments, such as senior citizens and customers without "
-        "dependents, show different churn behavior patterns."
-    )
-
-    st.divider()
-
-    # 7. Engagement & Dissatisfaction Signals
-    st.subheader("7. Engagement and Dissatisfaction Indicators")
-
-    engagement_cols = [
-        "Engagement Score",
-        "Low Engagement Flag",
-        "Dissatisfaction Score"
-    ]
-
-    for col in engagement_cols:
-        if col in df.columns:
-            st.write(f"{col} vs Churn:")
-            st.write(df.groupby("Churn Value")[col].mean())
-
-    st.write(
-        "Lower engagement and higher dissatisfaction scores are strong early indicators "
-        "of churn and can be used for proactive intervention."
-    )
-
-# MODEL PERFORMANCE
-elif page == "Model Performance":
-    st.title("Model Performance Evaluation")
-
-    X = df.drop(columns=["Churn Value"])
-    y = df["Churn Value"]
-
-    y_prob = model.predict_proba(X)[:, 1]
-    y_pred = (y_prob >= 0.55).astype(int)
-
-    from sklearn.metrics import roc_auc_score, confusion_matrix, precision_score, recall_score, f1_score
-
-    metrics = pd.DataFrame({
-        "Metric": ["ROC-AUC", "Precision", "Recall", "F1-Score"],
-        "Value": [
-            roc_auc_score(y, y_prob),
-            precision_score(y, y_pred),
-            recall_score(y, y_pred),
-            f1_score(y, y_pred)
-        ]
-    })
-
-    st.subheader("Evaluation Summary")
-    st.dataframe(metrics.style.format({"Value": "{:.3f}"}))
-    st.write(
-    "This table summarizes the overall performance of the churn prediction model. "
-    "ROC–AUC indicates how well the model ranks customers by churn risk across all thresholds. "
-    "Precision, Recall, and F1-Score focus on churn-class performance, which is critical "
-    "because churn datasets are typically imbalanced."
-)
-
-
-    st.subheader("Confusion Matrix")
-    st.write(confusion_matrix(y, y_pred))
-
-    st.write(
-    "This confusion matrix shows how predictions compare with actual churn outcomes.\n\n"
-    "• **0 = Non-Churn**, **1 = Churn**\n"
-    "• **True Negatives (TN)**: Correctly predicted non-churn customers\n"
-    "• **False Positives (FP)**: Non-churn customers incorrectly flagged as churn risk\n"
-    "• **False Negatives (FN)**: Churned customers that were missed by the model\n"
-    "• **True Positives (TP)**: Correctly predicted churn customers\n\n"
-    "From a business perspective, **False Negatives are the most costly**, "
-    "as they represent lost customers who could have been retained."
-)
-
-
-    st.subheader("Key Drivers of Churn")
-    final_model = model.steps[-1][1]
-
-    if hasattr(final_model, "feature_importances_"):
-        importance_df = pd.DataFrame({
-            "Feature": model.named_steps["preprocessor"].get_feature_names_out(),
-            "Importance": final_model.feature_importances_
-        }).sort_values("Importance", ascending=False).head(10)
-
-        st.dataframe(importance_df, use_container_width=True)
-
-        st.write(
-    "This table highlights the most influential features driving churn predictions. "
-    "Higher importance values indicate stronger impact on the model’s decision-making. "
-    "These features align with real-world business factors such as customer tenure, "
-    "pricing, engagement, and service quality, making the model explainable and trustworthy."
-)
-
     else:
-        st.write("Feature importance not available.")
+        fig7 = go.Figure()
+        fig7.add_annotation(text="No Feature Importance", showarrow=False, font=dict(color="white"))
 
-# CHURN PREDICTION
+    fig7.update_layout(
+        title="Features",
+        height=350,
+        paper_bgcolor="#0E1117",
+        plot_bgcolor="#0E1117",
+        font=dict(color="white")
+    )
 
-elif page == "Churn Prediction":
-    st.title("Customer Churn Prediction")
+    st.plotly_chart(fig7, use_container_width=True)
 
-    col1, col2 = st.columns(2)
 
-    with col1:
-        tenure = st.number_input("Tenure (months)", 0, 120, 12)
-        monthly_charges = st.number_input("Monthly Charges", 0.0, 500.0, 70.0)
-        contract = st.selectbox("Contract Type", ["Month-to-month", "One year", "Two year"])
-        internet_service = st.selectbox("Internet Service", ["Fiber optic", "DSL", "No"])
+# ---------------------------
+# CHART ROW 3
+# ---------------------------
+r3c1, r3c2, r3c3 = st.columns(3)
 
-    with col2:
-        tech_support = st.selectbox("Tech Support", ["Yes", "No"])
-        online_security = st.selectbox("Online Security", ["Yes", "No"])
-        payment_method = st.selectbox(
-            "Payment Method",
-            [
-                "Electronic check",
-                "Mailed check",
-                "Bank transfer (automatic)",
-                "Credit card (automatic)"
+# 8. SERVICE
+with r3c1:
+    service = curr_df.groupby(["Tech Support", "Churn Value"]).size().reset_index(name="count")
+
+    fig8 = px.bar(
+        service,
+        x="Tech Support",
+        y="count",
+        color="Churn Value",
+        barmode="group",
+        color_discrete_map={0:"#1f77b4", 1:"#ff7f0e"}
+    )
+
+    fig8.update_layout(
+        title="Service",
+        height=350,
+        paper_bgcolor="#0E1117",
+        plot_bgcolor="#0E1117",
+        font=dict(color="white")
+    )
+
+    st.plotly_chart(fig8, use_container_width=True)
+
+
+with r3c2:
+
+    # REAL METRICS
+    X = curr_df.drop(columns=["Churn Value"])
+    y = curr_df["Churn Value"]
+
+    y_pred = model.predict(X)
+
+    acc = accuracy_score(y, y_pred)
+    prec = precision_score(y, y_pred)
+    rec = recall_score(y, y_pred)
+    f1 = f1_score(y, y_pred)
+
+    metrics = ["Acc", "Prec", "Rec", "F1"]
+    values = [acc, prec, rec, f1]
+
+    # FIND BEST METRIC
+    max_val = max(values)
+
+    # COLORS (highlight best)
+    colors = ["#1f77b4" if v != max_val else "#00c853" for v in values]
+
+    fig9 = go.Figure()
+
+    fig9.add_bar(
+        x=metrics,
+        y=values,
+        marker_color=colors,
+        text=[f"{v:.2f}" for v in values],   # 🔥 value labels
+        textposition='outside'
+    )
+
+    fig9.update_layout(
+        title="Model",
+        height=350,
+        yaxis=dict(range=[0,1]),
+        paper_bgcolor="#0E1117",
+        plot_bgcolor="#0E1117",
+        font=dict(color="white"),
+        margin=dict(t=30, b=20, l=20, r=20)
+    )
+
+    st.plotly_chart(fig9, use_container_width=True)
+
+
+# 10. GAUGE
+with r3c3:
+    prob = model.predict_proba(curr_df.drop(columns=["Churn Value"]))[:,1].mean()
+
+    fig10 = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=prob * 100,
+        title={'text': "Churn %"},
+        gauge={
+            'axis': {'range': [0, 100]},
+            'bar': {'color': "red"},
+            'steps': [
+                {'range': [0, 50], 'color': "green"},
+                {'range': [50, 80], 'color': "yellow"},
+                {'range': [80, 100], 'color': "red"}
             ]
-        )
-
-    if st.button("Predict Churn Risk"):
-
-        user_input = {
-            "tenure": tenure,
-            "monthly_charges": monthly_charges,
-            "contract": contract,
-            "internet_service": internet_service,
-            "tech_support": tech_support,
-            "online_security": online_security,
-            "payment_method": payment_method
         }
+    ))
 
-        model_input = assemble_features(user_input)
-        churn_probability = model.predict_proba(model_input)[0][1]
-
-        if churn_probability >= 0.55:
-            risk_level = "High Risk"
-        elif churn_probability >= 0.35:
-            risk_level = "Medium Risk"
-        else:
-            risk_level = "Low Risk"
-
-        if tenure == 0:
-            customer_value = "Low Value"
-        elif tenure >= 12 and monthly_charges >= 60:
-            customer_value = "High Value"
-        elif tenure >= 6 or monthly_charges >= 40:
-            customer_value = "Medium Value"
-        else:
-            customer_value = "Low Value"
-
-        st.subheader("Prediction Result")
-        st.write(f"Churn Probability: {churn_probability:.2%}")
-        st.write(f"Risk Category: {risk_level}")
-
-        st.subheader("Customer Assessment")
-        st.write(f"Customer Value Segment: {customer_value}")
-
-        st.subheader("Retention Decision")
-
-        if risk_level == "High Risk" and customer_value == "High Value":
-            st.write("High-value customer at high churn risk.")
-            st.write("• Recommend proactive outreach with personalized retention offers.")
-            st.write("• Analyze customer complaints related to services such as:")
-            st.write("  - Poor network quality")
-            st.write("  - Delays in issue resolution by support teams")
-            st.write("  - Increasing costs over time (monthly or yearly)")
-
-        elif risk_level == "High Risk" and customer_value == "Medium Value":
-            st.write("Customer has high churn risk with moderate value.")
-            st.write("• Consider low-cost retention offers.")
-            st.write("• Monitor service quality and billing experience.")
-            st.write("• Analyze complaints related to our services")
-
-        elif risk_level == "High Risk" and customer_value == "Low Value":
-            st.write("Customer has high churn risk but low lifetime value.")
-            st.write("• Retention is not cost-effective.")
-            st.write("• No proactive retention action recommended.")
-
-        elif risk_level == "Medium Risk" and customer_value == "High Value":
-            st.write("High-value customer with moderate churn risk.")
-            st.write("• Monitor closely and provide engagement offers.")
-
-        elif risk_level == "Medium Risk":
-            st.write("Moderate churn risk detected.")
-            st.write("• Continue monitoring without immediate intervention.")
-
-        else:
-            st.write("Low churn risk detected.")
-            st.write("• No retention action required.")
-
-
-# RETENTION RECOMMENDATION
-
-elif page == "Retention Recommendation":
-    st.title("Retention Recommendation Framework")
-
-    st.write(
-        "This section presents a business-driven retention decision framework. "
-        "It explains how churn risk and customer value are combined to determine "
-        "whether retention actions are cost-effective."
+    fig10.update_layout(
+        height=350,
+        paper_bgcolor="#0E1117",
+        font=dict(color="white")
     )
 
-    st.divider()
-
-    st.subheader("Retention Strategy Matrix")
-
-    retention_table = pd.DataFrame({
-        "Churn Risk Level": [
-            "High Risk",
-            "High Risk",
-            "High Risk",
-            "Medium Risk",
-            "Medium Risk",
-            "Medium Risk",
-            "Low Risk"
-        ],
-        "Customer Value Segment": [
-            "High Value",
-            "Medium Value",
-            "Low Value",
-            "High Value",
-            "Medium Value",
-            "Low Value",
-            "Any"
-        ],
-        "Business Interpretation": [
-            "High revenue customer is very likely to churn",
-            "Moderate revenue customer is very likely to churn",
-            "Low revenue customer is very likely to churn",
-            "High revenue customer shows early churn signals",
-            "Average customer shows moderate churn risk",
-            "Low revenue customer shows moderate churn risk",
-            "Customer is stable with low churn probability"
-        ],
-        "Recommended Retention Action": [
-            "Immediate proactive retention with personalized offers and senior support",
-            "Targeted low-cost offers and service quality review",
-            "No proactive retention (cost not justified)",
-            "Close monitoring with engagement offers and service improvement",
-            "Monitor behavior and send soft engagement messages",
-            "No immediate action; observe long-term behavior",
-            "No retention required; maintain service quality"
-        ],
-        "Business Reasoning": [
-            "Losing a high-value customer causes significant revenue loss",
-            "Retention may be profitable if cost is controlled",
-            "Retention cost exceeds expected future revenue",
-            "Early intervention can prevent future high-value churn",
-            "Retention benefit is uncertain; avoid aggressive offers",
-            "Customer lifetime value is low",
-            "Retention investment not required"
-        ]
-    })
-
-    st.dataframe(retention_table, use_container_width=True)
-
-    
-
-    st.write(
-        "This framework is independent of the model prediction output and "
-        "serves as a decision guideline for business teams. "
-        "Actual retention actions are applied after evaluating both churn risk "
-        "and customer value."
-    )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    st.plotly_chart(fig10, use_container_width=True)
