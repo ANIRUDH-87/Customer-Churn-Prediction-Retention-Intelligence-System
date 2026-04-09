@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import os
 import joblib
 import plotly.express as px
 import plotly.graph_objects as go
@@ -74,9 +75,12 @@ st.markdown("""
 # ---------------------------
 # LOAD DATA
 # ---------------------------
+
 @st.cache_data
 def load_data():
-    return pd.read_csv("data/telco_churn_cleaned.csv")
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    data_path = os.path.join(BASE_DIR, "data", "telco_churn_cleaned.csv")
+    return pd.read_csv(data_path)
 
 df = load_data()
 
@@ -95,7 +99,9 @@ curr_df = df.iloc[split_index:]
 # ---------------------------
 @st.cache_resource
 def load_model():
-    return joblib.load("model/final_churn_model.pkl")
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(BASE_DIR, "model", "final_churn_model.pkl")
+    return joblib.load(model_path)
 
 model = load_model()
 
