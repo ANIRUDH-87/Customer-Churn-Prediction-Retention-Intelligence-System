@@ -612,3 +612,107 @@ with r3c3:
     )
 
     st.plotly_chart(fig10, use_container_width=True)
+
+
+
+
+
+
+ # ---------------------------
+# 🔮 INTERACTIVE CHURN PREDICTION (LEFT → INPUTS, RIGHT → GAUGE)
+# ---------------------------
+
+st.markdown("## 🔮 Predict Customer Churn")
+
+# CREATE 2 COLUMNS
+left_col, right_col = st.columns([1,1])
+
+# ---------------------------
+# LEFT SIDE → INPUTS
+# ---------------------------
+with left_col:
+
+    st.markdown("### Enter Customer Details")
+
+    tenure = st.slider("Tenure (Months)", 0, 72, 12)
+    monthly_charges = st.number_input("Monthly Charges", 0.0, 200.0, 70.0)
+
+    payment_method = st.selectbox(
+        "Payment Method",
+        ["Electronic check", "Mailed check", "Bank transfer", "Credit card"]
+    )
+
+    internet_service = st.selectbox(
+        "Internet Service",
+        ["DSL", "Fiber optic", "No"]
+    )
+
+    contract = st.selectbox(
+        "Contract Type",
+        ["Month-to-month", "One year", "Two year"]
+    )
+
+    tech_support = st.selectbox(
+        "Tech Support",
+        ["Yes", "No"]
+    )
+
+    predict_btn = st.button("🚀 Predict Churn")
+
+# ---------------------------
+# RIGHT SIDE → GAUGE
+# ---------------------------
+with right_col:
+
+    st.markdown("### Churn Prediction Result")
+
+    if predict_btn:
+
+        # TAKE BASE ROW (FIX FOR MODEL)
+        input_data = curr_df.drop(columns=["Churn Value"]).iloc[[0]].copy()
+
+        # UPDATE USER INPUTS
+        input_data["Tenure Months"] = tenure
+        input_data["Monthly Charges"] = monthly_charges
+        input_data["Payment Method"] = payment_method
+        input_data["Internet Service"] = internet_service
+        input_data["Contract"] = contract
+        input_data["Tech Support"] = tech_support
+
+        # PREDICT
+        pred_prob = model.predict_proba(input_data)[0][1] * 100
+
+        # GAUGE
+        gauge_fig = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=pred_prob,
+            title={'text': "Churn Probability (%)"},
+            gauge={
+                'axis': {'range': [0, 100]},
+                'bar': {'color': "red"},
+                'steps': [
+                    {'range': [0, 40], 'color': "green"},
+                    {'range': [40, 70], 'color': "yellow"},
+                    {'range': [70, 100], 'color': "red"}
+                ]
+            }
+        ))
+
+        gauge_fig.update_layout(
+            height=400,
+            paper_bgcolor="#0E1117",
+            font=dict(color="white")
+        )
+
+        st.plotly_chart(gauge_fig, use_container_width=True)
+
+        # RESULT TEXT
+        if pred_prob > 70:
+            st.error("⚠️ High Risk Customer")
+        elif pred_prob > 40:
+            st.warning("⚡ Medium Risk Customer")
+        else:
+            st.success("✅ Low Risk Customer")
+
+    else:
+        st.info("👉 Enter details and click Predict")
